@@ -86,25 +86,42 @@ void testModelFile(){
 
 void BNBTest(string fname){
 
-    double res;
+    double res = 0;
 
     clock_t startg, endg;
     startg = clock();
     GRBEnv env = GRBEnv();
     GRBModel model = GRBModel(env, fname);
+    model.set(GRB_IntParam_Cuts, 0);
+    model.set(GRB_DoubleParam_Heuristics, 0);
+    model.set(GRB_IntParam_RINS, 0);
+    model.set(GRB_IntParam_Presolve, 0);
+    model.set(GRB_IntParam_Aggregate, 0);
+    model.set(GRB_IntParam_Symmetry, 0);
+    model.set(GRB_IntParam_Disconnected, 0);
+    model.set(GRB_IntParam_Threads, 1);
+
     model.optimize();
     endg = clock();
     res = (double) (endg - startg) / CLOCKS_PER_SEC;
     cout << res << endl;
 
+//
+//    BranchAndBound bnb = BranchAndBound(fname);
+//    clock_t start, end;
+//    start = clock();
+//    bnb.run();
+//    end = clock();
+//    res = (double) (end - start) / CLOCKS_PER_SEC;
+//    cout << res << endl;
 
-    BranchAndBound bnb = BranchAndBound(fname);
-    clock_t start, end;
-    start = clock();
-    bnb.run();
-    end = clock();
-    res = (double) (end - start) / CLOCKS_PER_SEC;
-    cout << res << endl;
+//    auto vars = model.getVars();
+//    for(int i = 0; i < model.get(GRB_IntAttr_NumVars); i++){
+//        if(bnb.getSolution()[i] != vars[i].get(GRB_DoubleAttr_X)){
+//            cout << "Not equal solution" << endl;
+//            break;
+//        }
+//    }
 
 }
 

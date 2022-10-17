@@ -37,11 +37,13 @@ public:
 //        this->parent = parent;
     }
 
-//    ~Node(){
-////        auto vars = model->getVars();
-////        delete[] vars;
-//        delete this->model;
-//    }
+    ~Node(){
+// believe gurobi
+//        delete[] model->getVars();
+        delete this->model;
+        this->model = nullptr; // 573
+
+    }
 
     void setModel(GRBModel *m) {
         model = m;
