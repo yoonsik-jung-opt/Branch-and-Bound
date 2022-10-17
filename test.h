@@ -85,24 +85,25 @@ void testModelFile(){
 }
 
 void BNBTest(string fname){
-    BranchAndBound bnb = BranchAndBound(fname);
-//    bnb.subproblemSelection();
-    clock_t start, end;
+
     double res;
-    start = clock();
-    bnb.run();
-    end = clock();
-    res = (double) (end - start) / CLOCKS_PER_SEC;
-    cout << res << endl;
 
     clock_t startg, endg;
     startg = clock();
     GRBEnv env = GRBEnv();
     GRBModel model = GRBModel(env, fname);
-
     model.optimize();
     endg = clock();
     res = (double) (endg - startg) / CLOCKS_PER_SEC;
+    cout << res << endl;
+
+
+    BranchAndBound bnb = BranchAndBound(fname);
+    clock_t start, end;
+    start = clock();
+    bnb.run();
+    end = clock();
+    res = (double) (end - start) / CLOCKS_PER_SEC;
     cout << res << endl;
 
 }
@@ -137,7 +138,7 @@ void exportSCModel(string fname){
     // minimize
     model.set(GRB_IntAttr_ModelSense, 1);
 
-    model.optimize();
+//    model.optimize();
     model.write(fname+".lp");
 
 }

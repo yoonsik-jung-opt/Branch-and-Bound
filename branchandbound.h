@@ -4,6 +4,7 @@
 
 #ifndef BB_BRANCHANDBOUND_H
 #define BB_BRANCHANDBOUND_H
+
 #include <vector>
 #include "node.h"
 #include "tree.h"
@@ -11,168 +12,180 @@
 
 using namespace std;
 
-class BranchAndBound{
+class BranchAndBound {
 private:
     double LB;
     double UB;
-    vector<Node*> solved;
-    vector<Node*> unsolved;// unsolved를 binary tree형태로 구성하면 minimum값 찾는 것이 빨라질듯? tie까지 고려할 수 있는 자료구조 고려해볼것
-    Node* bestNode;
-    Node* root;
+    vector<Node *> solved;
+    vector<Node *> unsolved;// unsolved를 binary tree형태로 구성하면 minimum값 찾는 것이 빨라질듯? tie까지 고려할 수 있는 자료구조 고려해볼것
+    Node *bestNode;
+    Node *root;
     int nVar;
     int nNode = 0;
     bool terminated = false;
     vector<int> integerVarIdx;
+    int solvedNode = 0;
+    GRBEnv env = GRBEnv();
 
 
 public:
-    BranchAndBound(){
+    BranchAndBound() {
 
     }
 
-    BranchAndBound(string fname): bestNode(nullptr), terminated(false){
+    BranchAndBound(string fname) : bestNode(nullptr), terminated(false) {
 
         LB = numeric_limits<double>::infinity();
         UB = numeric_limits<double>::infinity();
 
-        try{
-            GRBEnv env = GRBEnv();
+        try {
+//            GRBEnv env = GRBEnv();
             env.set(GRB_IntParam_LogToConsole, 0);
-            GRBModel* m = new GRBModel(env, fname);
+            GRBModel *m = new GRBModel(env, fname);
             m->set(GRB_IntAttr_ModelSense, 1); // change to minimization problem
-            GRBVar* vars = m->getVars();
-            for(int i =0; i < m->get(GRB_IntAttr_NumVars); i++){ // LP relexation & change objective sense to negative
+            GRBVar *vars = m->getVars();
+            for (int i = 0;
+                 i < m->get(GRB_IntAttr_NumVars); i++) { // LP relexation & change objective sense
                 vars[i].set(GRB_CharAttr_VType, 'c');
-                if(m->get(GRB_IntAttr_ModelSense) == -1){
+                if (m->get(GRB_IntAttr_ModelSense) == -1) {
                     vars[i].set(GRB_DoubleAttr_Obj, -vars[i].get(GRB_DoubleAttr_Obj));
-                }
-                else{
+                } else {
                     vars[i].set(GRB_DoubleAttr_Obj, vars[i].get(GRB_DoubleAttr_Obj));
                 }
 
             }
             nVar = m->get(GRB_IntAttr_NumVars);
-            Node* root = new Node(m, numeric_limits<double>::infinity(), nVar);
+            Node *root = new Node(m, numeric_limits<double>::infinity(), nVar);
             this->root = root;
             unsolved.push_back(root);
         }
-        catch(GRBException e) {
-            cout << e.getErrorCode() << " "<< e.getMessage() << endl;
+        catch (GRBException e) {
+            cout << e.getErrorCode() << " " << e.getMessage() << endl;
         }
     }
 
-    void subproblemSelection(){
-        if(this->unsolved.size() == 0){
+    void subproblemSelection() {
+        if (this->unsolved.size() == 0) {
             cout << "terminate B&B" << endl;
             terminated = true;
-        }
-        else{
-            auto minNodes = min_element(unsolved.begin(), unsolved.end(), [](auto lhs, auto rhs){
+        } else {
+            auto minNodes = min_element(unsolved.begin(), unsolved.end(), [](auto lhs, auto rhs) {
                 return lhs->getLB() > rhs->getLB();
             });
             auto minNode = minNodes[0];
+
+
             (*minNode).solve();
             int status = minNode->getModel()->get(GRB_IntAttr_Status);
-            if(status == GRB_OPTIMAL){
+            if (status == GRB_OPTIMAL) {
                 double lpObj = minNode->getLPObj();
                 bool isInteger = minNode->isIntegerSolution();
-                solved.push_back(minNode);
+                solvedNode++;
+//                solved.push_back(minNode);
                 unsolved.erase(find(unsolved.begin(), unsolved.end(), minNode));
-                if(isInteger){
+                if (isInteger) {
                     // terminate by solving
-                    if(lpObj < UB){
+                    if (lpObj < UB) {
                         UB = lpObj;
                         bestNode = minNode;
+                        cout << "Incumbent solution Found : "<< UB;
                         bound();
                     }
-                }
-                else{
-                    if(lpObj < LB){
+                } else {
+                    if (lpObj < LB) {
                         LB = lpObj;
                     }
                     heuristicVariableSelection(minNode);
                 }
-            }
-            else{
+            } else {
                 unsolved.erase(find(unsolved.begin(), unsolved.end(), minNode));
             }
         }
     }
 
-    bool checkPruning(Node* node){
-        if(node->getLB() > UB){
+    bool checkPruning(Node *node) {
+        if (node->getLB() > UB) {
             return true;
-        }
-        else
+        } else
             return false;
     }
 
-    void bound(){
-        unsolved.erase(remove_if(unsolved.begin(), unsolved.end(), [this](Node* n){ return n->getLB() > UB;}), unsolved.end());
+    void bound() {
+        unsolved.erase(remove_if(unsolved.begin(), unsolved.end(), [this](Node *n) { return n->getLB() > UB; }),
+                       unsolved.end());
     }
 
-    void heuristicVariableSelection(Node* node){
-        // split into two subproblem and append to unsolved
-//        try{
+    void heuristicVariableSelection(Node *node) {
+        // split into two subproblems and append to unsolved
+        try {
 
             auto vars = node->getModel()->getVars();
             auto sols = node->getSolution();
             double cutpoint = 0;
             int branchingVarIdx = 0;
-            for(int i = 0; i < nVar; i++){
-//                double x = vars[i].get(GRB_DoubleAttr_X);
+            for (int i = 0; i < nVar; i++) {
                 double x = sols[i];
-                if(x != (int)x){
+                if (x != (int) x) {
                     cutpoint = x;
                     branchingVarIdx = i;
                     break;
                 }
             }
-        // generate subproblems
 
+            // generate subproblems (Branching) -> 추후 독립적인 함수로 분할할 것
             int cCutpoint = ceil(cutpoint);
             int fCutpoint = floor(cutpoint);
 
-            GRBEnv env = GRBEnv();
+//            GRBEnv env = GRBEnv();
             env.set(GRB_IntParam_LogToConsole, 0);
-            GRBModel* lModel = new GRBModel(*(node->getModel()));
-            lModel->addConstr(vars[branchingVarIdx] <= fCutpoint);
-            Node* lNode = new Node(lModel, node, node->getLPObj(), nVar);
+            GRBModel *lModel = new GRBModel(*(node->getModel()));
+//            lModel->addConstr(vars[branchingVarIdx] <= fCutpoint); // for integer variable
+            vars = lModel->getVars();
+            vars[branchingVarIdx].set(GRB_DoubleAttr_UB, fCutpoint);
+            vars[branchingVarIdx].set(GRB_DoubleAttr_LB, fCutpoint);
+            Node *lNode = new Node(lModel, node, node->getLPObj(), nVar);
             nNode++;
 
-            GRBModel* rModel = new GRBModel(*(node->getModel()));
-            rModel->addConstr(vars[branchingVarIdx] >= cCutpoint);
-            Node* rNode = new Node(rModel, node, node->getLPObj(), nVar);
+            GRBModel *rModel = new GRBModel(*(node->getModel()));
+//            rModel->addConstr(vars[branchingVarIdx] >= cCutpoint);
+            vars = rModel->getVars();
+            vars[branchingVarIdx].set(GRB_DoubleAttr_UB, cCutpoint);
+            vars[branchingVarIdx].set(GRB_DoubleAttr_LB, cCutpoint);
+            Node *rNode = new Node(rModel, node, node->getLPObj(), nVar);
             nNode++;
 
-            node->setLeft(lNode);
-            node->setRight(rNode);
+//            node->setLeft(lNode);
+//            node->setRight(rNode);
 
             // add to unsolved
             unsolved.push_back(lNode);
             unsolved.push_back(rNode);
-//        }
-//        catch(GRBException e){
-//            cout << e.getErrorCode()<<" "<< e.getMessage() << endl;
-//            cout << "error" << endl;
-//        }
+        }
+        catch (GRBException e) {
+            cout << e.getErrorCode() << " " << e.getMessage() << endl;
+            cout << "error" << endl;
+        }
 //        cout << endl;
 
     }
 
-    void run(){
-        while(!terminated){
+    void run() {
+        while (!terminated) {
             subproblemSelection();
+            cout << "solved: " << solvedNode << " unsolved: " << unsolved.size() << endl;
+
         }
         cout << bestNode->getLPObj() << endl;
-        for(auto s : bestNode->getSolution()){
+        for (auto s: bestNode->getSolution()) {
             cout << s << " ";
-            cout << endl;
+//
         }
+        cout << endl;
     }
 
-    bool isTerminated(){
+    bool isTerminated() {
         return terminated;
     }
 };
+
 #endif //BB_BRANCHANDBOUND_H
